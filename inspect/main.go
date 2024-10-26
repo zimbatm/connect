@@ -46,6 +46,11 @@ func main() {
 	if fname == "parse_pcap" || fname == "p" {
 		payload.PcapToTransportFiles(testCase.DataPath, testCase.SavePath, testCase.SourceIP)
 	} else {
+		if fname == "cluster" || fname == "c" {
+			runCluster(clusterMethod, testCase.CoOccurrencePath)
+			return
+		}
+
 		records, err := payload.LoadTransportsFromFiles(testCase.SavePath)
 		if err != nil {
 			log.Fatalf("Error loading transports: %v", err)
@@ -55,8 +60,6 @@ func main() {
 			payload.DisplayTransports(records)
 		} else if fname == "timestamps" || fname == "t" {
 			parseTimestamps(&overlapFunctions, records, testCase.CoOccurrencePath)
-		} else if fname == "cluster" || fname == "c" {
-			runCluster(clusterMethod, testCase.CoOccurrencePath)
 		} else if fname == "evaluate" || fname == "e" {
 			runEvaluate(&overlapFunctions, clusterMethod, records, testCase.CoOccurrencePath, testCase.RegionsFunc)
 		} else if fname == "genetic_hill_climbing" || fname == "ghc" {
