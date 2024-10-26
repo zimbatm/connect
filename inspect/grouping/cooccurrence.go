@@ -23,11 +23,13 @@ func (s SessionID) Compare(other SessionID) int {
 	}
 }
 
-type CoOccurrenceData map[SessionID]map[SessionID]uint64
+type CoOccurrenceData map[uint64]map[uint64]uint64
 
 // used to precompute distances for clustering
 type CoOccurrence struct {
-	Data *CoOccurrenceData
+	Data      *CoOccurrenceData
+	IdMapping map[SessionID]uint64 // map from session id to internal cooccurrence id (0 is never used as id)
+	nextId    uint64
 }
 
 func NewCoOccurrence(cmapData *CoOccurrenceData) *CoOccurrence {
@@ -36,12 +38,31 @@ func NewCoOccurrence(cmapData *CoOccurrenceData) *CoOccurrence {
 		cmapData = &_cmapData
 	}
 	return &CoOccurrence{
-		Data: cmapData,
+		Data:      cmapData,
+		IdMapping: make(map[SessionID]uint64),
+		nextId:    1, // 0 is never used as id
 	}
 }
 
+// gets the internal id of the provided session id
+// if the session id is not in the mapping, it is added as the next available id
+func (c *CoOccurrence) getInternalId(sid SessionID) uint64 {
+	cid, ok := c.IdMapping[sid]
+	if !ok {
+		cid = c.nextId
+		c.IdMapping[sid] = cid
+		c.nextId++
+	}
+	return cid
+}
+
+func (c *CoOccurrence) GetInternalMapping() map[SessionID]uint64 {
+	return c.IdMapping
+}
+
 func (c *CoOccurrence) SetOuterKey(sid SessionID) {
-	(*c.Data)[sid] = make(map[SessionID]uint64, 0)
+	cid := c.getInternalId(sid)
+	(*c.Data)[cid] = make(map[uint64]uint64, 0)
 }
 
 func (c *CoOccurrence) CalcAndSet(ov1 Overlap, ov2 Overlap) {
@@ -57,39 +78,45 @@ func (c *CoOccurrence) CalcAndSet(ov1 Overlap, ov2 Overlap) {
 		return // do not record 0 overlap
 	}
 
+	cid1 := c.getInternalId(sid1)
+	cid2 := c.getInternalId(sid2)
+
 	switch sid1.Compare(sid2) {
 	case -1: // sid1 < sid2
-		if _, ok := (*c.Data)[sid1]; !ok {
-			(*c.Data)[sid1] = make(map[SessionID]uint64, 0)
+		if _, ok := (*c.Data)[cid1]; !ok {
+			(*c.Data)[cid1] = make(map[uint64]uint64, 0)
 		}
-		(*c.Data)[sid1][sid2] = totalOverlap
+		(*c.Data)[cid1][cid2] = totalOverlap
 	case 1: // sid1 > sid2
-		if _, ok := (*c.Data)[sid2]; !ok {
-			(*c.Data)[sid2] = make(map[SessionID]uint64, 0)
+		if _, ok := (*c.Data)[cid2]; !ok {
+			(*c.Data)[cid2] = make(map[uint64]uint64, 0)
 		}
-		(*c.Data)[sid2][sid1] = totalOverlap
+		(*c.Data)[cid2][cid1] = totalOverlap
 	}
 }
 
 func (c *CoOccurrence) Get(sid1 SessionID, sid2 SessionID) uint64 {
-	// if value doesnt exist then 0 value is returned (which is desired)
+	cid1 := c.getInternalId(sid1)
+	cid2 := c.getInternalId(sid2)
+
+	// if value doesn't exist then 0 value is returned (which is desired)
 	if sid1.Compare(sid2) < 0 {
-		return (*c.Data)[sid1][sid2]
+		return (*c.Data)[cid1][cid2]
 	}
-	return (*c.Data)[sid2][sid1]
+	return (*c.Data)[cid2][cid1]
 }
 
 func (c *CoOccurrence) SaveData(dataPath string) error {
 	coocData := make([]*protocol.CoocOuter, 0)
 
-	for outerSid, coocInner := range *c.Data {
+	for outerCid, coocInner := range *c.Data {
 		outer := &protocol.CoocOuter{
-			Sid: string(outerSid),
+			Cid: outerCid,
 		}
 
-		for innerSid, overlap := range coocInner {
+		for innerCid, overlap := range coocInner {
 			outer.CoocInner = append(outer.CoocInner, &protocol.CoocInner{
-				Sid:     string(innerSid),
+				Cid:     innerCid,
 				Overlap: overlap,
 			})
 		}
@@ -97,8 +124,17 @@ func (c *CoOccurrence) SaveData(dataPath string) error {
 		coocData = append(coocData, outer)
 	}
 
+	mappingData := make([]*protocol.CoocSid, 0)
+	for sid, cid := range c.IdMapping {
+		mappingData = append(mappingData, &protocol.CoocSid{
+			Sid: string(sid),
+			Cid: cid,
+		})
+	}
+
 	dataToSave := &protocol.CooccurrenceData{
 		CoocOuter: coocData,
+		CoocSid:   mappingData,
 	}
 
 	out, err := proto.Marshal(dataToSave)
@@ -121,19 +157,20 @@ func (c *CoOccurrence) LoadData(dataPath string) error {
 	}
 
 	result := make(CoOccurrenceData, 0)
-
 	for _, outer := range coocData.CoocOuter {
-		outerSid := SessionID(outer.Sid)
-
-		innerMap := make(map[SessionID]uint64)
+		innerMap := make(map[uint64]uint64)
 		for _, inner := range outer.CoocInner {
-			innerSid := SessionID(inner.Sid)
-			innerMap[innerSid] = inner.Overlap
+			innerMap[inner.Cid] = inner.Overlap
 		}
-
-		result[outerSid] = innerMap
+		result[outer.Cid] = innerMap
 	}
-
 	c.Data = &result
+
+	mapping := make(map[SessionID]uint64)
+	for _, sid := range coocData.CoocSid {
+		mapping[SessionID(sid.Sid)] = sid.Cid
+	}
+	c.IdMapping = mapping
+
 	return nil
 }

@@ -231,9 +231,11 @@ func GoCluster(clusterOps *ClusterOpts, printPython bool) (map[string][]SessionI
 
 	// get all sids (top level) in cooc map
 	sids := make([]SessionID, 0)
-	for sid := range *cooc.Data {
+	coodSids := cooc.GetInternalMapping()
+	for sid := range coodSids {
 		sids = append(sids, sid)
 	}
+
 	// order sids lexicographically (for consistent results)
 	sort.Slice(sids, func(i, j int) bool {
 		return SessionID(sids[i]).Compare(SessionID(sids[j])) <= 0

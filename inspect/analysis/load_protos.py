@@ -26,13 +26,17 @@ def load_cooc(filename):
     cooc_data = cooccurrence_pb2.CooccurrenceData()
     cooc_data.ParseFromString(data)
 
+    mapping = {}
+    for entry in cooc_data.cooc_sid:
+        mapping[entry.cid] = entry.sid
+
     max_overlap = -1
     result = {}
     for outer in cooc_data.cooc_outer:
-        outer_sid = outer.sid  # .hex()
+        outer_sid = mapping[outer.cid]
         inner_dict = {}
         for inner in outer.cooc_inner:
-            inner_sid = inner.sid  # .hex()
+            inner_sid = mapping[inner.cid]
             inner_dict[inner_sid] = inner.overlap
             if inner.overlap > max_overlap:
                 max_overlap = inner.overlap

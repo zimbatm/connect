@@ -6,17 +6,24 @@ option go_package = "bringyour.com/protocol";
 // Converts a struct of type map[tid]map[tid]uint64
 
 message CoocInner {
-    string sid = 1;  // inner tid
+    uint64 cid = 1;  // inner id
     uint64 overlap = 2; // inner map value
 }
 
 message CoocOuter {
-    string sid = 1;  // outer tid
+    uint64 cid = 1;  // outer id
     repeated CoocInner cooc_inner = 2; // list of inner maps
+}
+
+// mapping from internal id to transport id
+message CoocSid {
+    uint64 cid = 1; // internal cooccurence id
+    string sid = 2; // transport id
 }
 
 message CooccurrenceData {
     repeated CoocOuter cooc_outer = 1; // list of outer maps
+    repeated CoocSid cooc_sid = 2; // list of internal to transport id mappings
 }
 
 message TimesData {

@@ -22,7 +22,7 @@ type clusterTest struct {
 }
 
 func TestClustering(t *testing.T) {
-	testFolder := "data/test_cluster/"
+	testFolder := "../data/test_cluster/"
 
 	tests := []struct {
 		name     string
@@ -32,7 +32,7 @@ func TestClustering(t *testing.T) {
 	}{
 		{
 			name:     "Test Session 1",
-			pcapPath: "data/ts1/ts1.pcapng",
+			pcapPath: "../data/ts1/ts1.pcapng",
 			sourceIP: "145.94.160.91",
 			clusters: []clusterTest{
 				{
@@ -91,7 +91,7 @@ func TestClustering(t *testing.T) {
 		},
 		{
 			name:     "Test Session 2",
-			pcapPath: "data/ts2/ts2.pcapng",
+			pcapPath: "../data/ts2/ts2.pcapng",
 			sourceIP: "145.94.190.27",
 			clusters: []clusterTest{
 				{
