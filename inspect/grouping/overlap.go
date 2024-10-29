@@ -131,8 +131,16 @@ func (fmo *FixedMarginOverlap) CalculateOverlap(times1, times2 []uint64) uint64 
 	activeTimes1 := 0
 	activeTimes2 := 0
 	lastTime := uint64(0)
+	lastOverlap := uint64(0)
 
 	for _, e := range events {
+		// check for overflow
+		if lastOverlap > totalOverlap {
+			fmt.Println("overflow")
+			return ^uint64(0) // max uint64
+		}
+		lastOverlap = totalOverlap
+
 		if activeTimes1 > 0 && activeTimes2 > 0 {
 			totalOverlap += e.eTime - lastTime
 		}
@@ -221,6 +229,11 @@ func (gausso *GaussianOverlap) CalculateOverlap(times1, times2 []uint64) uint64 
 			// fmt.Printf("[%v] overlap b/w %.6f and %.6f = %v\n", g1.Sigma, g1.Mu, g2.Mu, overlap)
 			totalOverlap += overlap
 		}
+	}
+	// check for overflow
+	if totalOverlap < 0.0 {
+		fmt.Println("overflow")
+		return ^uint64(0) // max uint64
 	}
 
 	return TimestampInNano(totalOverlap) // convert to nanoseconds

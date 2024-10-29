@@ -221,18 +221,17 @@ func GoCluster(clusterOps *ClusterOpts, printPython bool) (map[string][]SessionI
 
 	// get max value from cooccurrence map
 	maxOverlap := uint64(0)
-	for _, inner := range *cooc.Data {
-		for _, overlap := range inner {
-			if overlap > maxOverlap {
-				maxOverlap = overlap
-			}
+	coocData := cooc.GetNonZeroData()
+	for _, overlap := range *coocData {
+		if overlap > maxOverlap {
+			maxOverlap = overlap
 		}
 	}
 
 	// get all sids (top level) in cooc map
 	sids := make([]SessionID, 0)
-	coodSids := cooc.GetInternalMapping()
-	for sid := range coodSids {
+	coocSids := cooc.GetInternalMapping()
+	for sid := range *coocSids {
 		sids = append(sids, sid)
 	}
 

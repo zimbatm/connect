@@ -3,8 +3,6 @@ package bringyour;
 
 option go_package = "bringyour.com/protocol";
 
-// Converts a struct of type map[tid]map[tid]uint64
-
 message CoocInner {
     uint64 cid = 1;  // inner id
     uint64 overlap = 2; // inner map value

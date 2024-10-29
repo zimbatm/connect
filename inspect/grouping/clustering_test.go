@@ -187,9 +187,12 @@ func TestClustering(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Error loading transports: %v", err)
 				}
-				overlapFunctions := GaussianOverlap{
-					StdDev: TimestampInNano(0.010_000_000), // x seconds
-					Cutoff: 4,                              // x standard deviations
+				// overlapFunctions := GaussianOverlap{
+				// 	StdDev: TimestampInNano(0.010_000_000), // x seconds
+				// 	Cutoff: 4,                              // x standard deviations
+				// }
+				overlapFunctions := FixedMarginOverlap{
+					Margin: TimestampInNano(0.010_000_000), // x seconds fixed margin
 				}
 				sessionTimestamps := MakeTimestamps(&overlapFunctions, records)
 

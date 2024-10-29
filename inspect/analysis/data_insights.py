@@ -61,7 +61,7 @@ def graph_data(cooc_data, sids, clusters, max_overlap, print_stats):
     plt.xticks(ticks=np.arange(len(sids)), labels=truncated_labels, rotation=90)
     plt.yticks(ticks=np.arange(len(sids)), labels=truncated_labels)
     plt.tick_params(axis="both", labelsize=4)
-    xy_label = "Truncated transport IDs (per TCP session)"
+    xy_label = "Sessions"
     plt.xlabel(xy_label)
     plt.ylabel(xy_label)
 

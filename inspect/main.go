@@ -35,13 +35,13 @@ func main() {
 	clusterMethod := grouping.NewHDBSCAN(hdbscanOpts)
 
 	// OVERLAP FUNCTIONS
-	// overlapFunctions := grouping.FixedMarginOverlap{
-	// 	Margin: grouping.TimestampInNano(0.010_000_000), // x seconds fixed margin
-	// }
-	overlapFunctions := grouping.GaussianOverlap{
-		StdDev: grouping.TimestampInNano(0.010_000_000), // x seconds
-		Cutoff: 4,                                       // x standard deviations
+	overlapFunctions := grouping.FixedMarginOverlap{
+		Margin: grouping.TimestampInNano(0.010_000_000), // x seconds fixed margin
 	}
+	// overlapFunctions := grouping.GaussianOverlap{
+	// 	StdDev: grouping.TimestampInNano(0.010_000_000), // x seconds
+	// 	Cutoff: 4,                                       // x standard deviations
+	// }
 
 	if fname == "parse_pcap" || fname == "p" {
 		payload.PcapToTransportFiles(testCase.DataPath, testCase.SavePath, testCase.SourceIP)
@@ -77,6 +77,8 @@ func parseTimestamps(overlapFunctions grouping.OverlapFunctions, records *map[ul
 	sessionTimestamps := grouping.MakeTimestamps(overlapFunctions, records)
 	cooc, _ := grouping.MakeCoOccurrence(sessionTimestamps)
 	cooc.SaveData(coOccurrencePath)
+	dataSize, idMapSize := cooc.MemorySize()
+	log.Printf("CoOccurrence memory size: data=%d ids=%d total=%d bytes", dataSize, idMapSize, dataSize+idMapSize)
 	overlapStats(cooc)
 }
 
@@ -185,13 +187,8 @@ func saveTimes(overlapFunctions grouping.OverlapFunctions, records *map[ulid.ULI
 // print statistics about overlaps in cooccurrence map
 func overlapStats(cooc *grouping.CoOccurrence) {
 	float64Overlaps := make([]float64, 0)
-	for _, cmap := range *cooc.Data {
-		for _, v := range cmap {
-			new_v := grouping.TimestampInSeconds(v)
-			if new_v > 0 {
-				float64Overlaps = append(float64Overlaps, new_v)
-			}
-		}
+	for _, v := range *cooc.GetNonZeroData() {
+		float64Overlaps = append(float64Overlaps, grouping.TimestampInSeconds(v))
 	}
 	log.Printf(`Co-occurrence statistics:
 # of timestamps: %d
@@ -201,7 +198,7 @@ func overlapStats(cooc *grouping.CoOccurrence) {
 	Mean: %.9f
 	StdDev: %.9f`,
 
-		len(*cooc.Data),
+		len(*cooc.GetInternalMapping()),
 		len(float64Overlaps),
 		floats.Min(float64Overlaps),
 		floats.Max(float64Overlaps),
