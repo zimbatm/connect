@@ -108,6 +108,10 @@ func (c *CoOccurrence) Get(sid1 SessionID, sid2 SessionID) uint64 {
 	return (*c.data)[cid2][cid1]
 }
 
+func (c *CoOccurrence) GetData() *CoOccurrenceData {
+	return c.data
+}
+
 func (c *CoOccurrence) GetNonZeroData() *[]uint64 {
 	tuples := make([]uint64, 0)
 	for _, innerMap := range *c.data {

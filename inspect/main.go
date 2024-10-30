@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"bringyour.com/protocol"
 
 	"github.com/oklog/ulid/v2"
+	"github.com/shenwei356/countminsketch"
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/stat"
 	"google.golang.org/protobuf/proto"
@@ -49,6 +51,9 @@ func main() {
 		if fname == "cluster" || fname == "c" {
 			runCluster(clusterMethod, testCase.CoOccurrencePath)
 			return
+		} else if fname == "reduce_cooc" || fname == "rc" {
+			reduceCooc(testCase.CoOccurrencePath)
+			return
 		}
 
 		records, err := payload.LoadTransportsFromFiles(testCase.SavePath)
@@ -70,6 +75,75 @@ func main() {
 			log.Fatalf("Unknown mode: %s", fname)
 		}
 	}
+}
+
+func reduceCooc(coOccurrencePath string) {
+	// load cooc data from file
+	cooc := grouping.NewCoOccurrence(nil)
+	if err := cooc.LoadData(coOccurrencePath); err != nil {
+		panic(err)
+	}
+	dataSize, idMapSize := cooc.MemorySize()
+	log.Printf("CoOccurrence memory size: data=%d ids=%d total=%d bytes", dataSize, idMapSize, dataSize+idMapSize)
+
+	d := uint(12)
+	w := uint(1000)
+	s, _ := countminsketch.New(d, w)
+	// size of data should be 8*d*w bytes
+	fmt.Printf("d: %d, w: %d\n", s.D(), s.W())
+
+	// go through cooc data and add to count min sketch
+	total, wrong := 0, 0
+	for i, cmap := range *cooc.GetData() {
+		for j, v := range cmap {
+			s.UpdateString(fmt.Sprintf("%d-%d", i, j), v)
+		}
+	}
+
+	coocData := make([]*protocol.CoocOuter, 0)
+
+	totalErr := 0.0
+	// go through cooc data and compare estimated value to count min sketch value
+	for i, coocInner := range *cooc.GetData() {
+		outer := &protocol.CoocOuter{Cid: i}
+		for j, v := range coocInner {
+			// load estimated value from count min sketch
+			estimate := s.EstimateString(fmt.Sprintf("%d-%d", i, j))
+			outer.CoocInner = append(outer.CoocInner, &protocol.CoocInner{Cid: j, Overlap: estimate})
+			total++
+			if estimate != v {
+				currErr := float64(estimate-v) / float64(v) * 100
+				totalErr += currErr
+				// fmt.Printf("Estimate failed for %d-%d: %d!=%d (difference=%d overflow by %.2f%%)\n", i, j, estimate, v, estimate-v, currErr)
+				wrong++
+			}
+		}
+		coocData = append(coocData, outer)
+	}
+	fmt.Printf("Total: %d, Wrong: %d, AvgErr: %.2f%%\n", total, wrong, totalErr/float64(wrong))
+
+	// get size of count min sketch using WriteTo
+	buf := new(bytes.Buffer)
+	size, _ := s.WriteTo(buf)
+	log.Printf("CountMinSketch memory size: %d bytes", size)
+	buf = nil
+
+	mappingData := make([]*protocol.CoocSid, 0)
+	for sid, cid := range *cooc.GetInternalMapping() {
+		mappingData = append(mappingData, &protocol.CoocSid{Sid: string(sid), Cid: cid})
+	}
+	dataToSave := &protocol.CooccurrenceData{CoocOuter: coocData, CoocSid: mappingData}
+	_, err := proto.Marshal(dataToSave)
+	// out, err := proto.Marshal(dataToSave)
+	if err != nil {
+		panic(err)
+	}
+
+	// save cooc to file if you want to cluster it
+	// err = os.WriteFile(coOccurrencePath, out, 0644)
+	// if err != nil {
+	// 	panic(err)
+	// }
 }
 
 func parseTimestamps(overlapFunctions grouping.OverlapFunctions, records *map[ulid.ULID]*payload.TransportRecord, coOccurrencePath string) {

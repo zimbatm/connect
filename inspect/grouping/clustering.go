@@ -15,7 +15,7 @@ import (
 	"bringyour.com/inspect/payload"
 	"bringyour.com/protocol"
 
-	"github.com/humilityai/hdbscan"
+	"github.com/bringyour/cluster/hdbscan"
 	"github.com/oklog/ulid/v2"
 	"google.golang.org/protobuf/proto"
 )
@@ -284,7 +284,7 @@ func GoCluster(clusterOps *ClusterOpts, printPython bool) (map[string][]SessionI
 	}
 
 	// run clustering
-	score := hdbscan.VarianceScore // StabilityScore seems to not cluster anything so using VarianceScore
+	score := hdbscan.VarianceScore // StabilityScore seems to not be fully implemented so using VarianceScore
 	minimumSpanningTree := false   // with true seems to cluster everything together so using false
 	clustering.Run(distanceFunc, score, minimumSpanningTree)
 
