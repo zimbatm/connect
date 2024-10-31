@@ -30,7 +30,7 @@ func (c *GeneticCluster) Evaluate() (float64, error) {
 
 // Mutate replaces one of the current coordinates with a random value in [-100, -100].
 func (c *GeneticCluster) Mutate(rng *rand.Rand) {
-	method := rng.Intn(2)
+	method := rng.Intn(2) // only mutate minSamples and eps (not std dev)
 	if method == 0 {
 		// change minSamples
 		change := uint64(rng.Intn(2) + 1) // 1 or 2
