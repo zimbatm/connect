@@ -202,8 +202,8 @@ func TestClustering(t *testing.T) {
 			}
 
 			// cluster
-			hdbscanOpts := fmt.Sprintf("min_cluster_size=%d,min_samples=%d,cluster_selection_epsilon=%.12f,alpha=%.12f", 4, 1, 0.001, 0.001)
-			clusterMethod := NewHDBSCAN(hdbscanOpts)
+			// clusterMethod := grouping.NewOptics(fmt.Sprintf("min_samples=%d,max_eps=%f", 3, 0.20227))
+			clusterMethod := NewHDBSCAN(fmt.Sprintf("min_cluster_size=%d,min_samples=%d,cluster_selection_epsilon=%.12f,alpha=%.12f", 4, 1, 0.001, 0.001))
 			clusterOps := &ClusterOpts{
 				ClusterMethod:    clusterMethod,
 				CoOccurrencePath: cooccurrencePath,

@@ -21,7 +21,7 @@ import (
 
 func main() {
 	if len(os.Args) != 2 {
-		log.Fatalf("Usage: %s {p,dt,t,c,e,ghc,st}\n", os.Args[0])
+		log.Fatal("Usage: 'go run . MODE' where MODE={p,dt,t,c,e,ghc,st,rc}")
 	}
 	fname := os.Args[1]
 
@@ -31,10 +31,8 @@ func main() {
 	fmt.Printf("Test Case=%+v\n", testCase)
 
 	// CLUSTERING OPTIONS
-	// opticsOpts := fmt.Sprintf("min_samples=%d,max_eps=%f", 3, 0.20227)
-	// clusterMethod := grouping.NewOptics(opticsOpts)
-	hdbscanOpts := fmt.Sprintf("min_cluster_size=%d,min_samples=%d,cluster_selection_epsilon=%.12f,alpha=%.12f", 4, 1, 0.001, 0.001)
-	clusterMethod := grouping.NewHDBSCAN(hdbscanOpts)
+	// clusterMethod := grouping.NewOptics(fmt.Sprintf("min_samples=%d,max_eps=%f", 3, 0.20227))
+	clusterMethod := grouping.NewHDBSCAN(fmt.Sprintf("min_cluster_size=%d,min_samples=%d,cluster_selection_epsilon=%.12f,alpha=%.12f", 4, 1, 0.001, 0.001))
 
 	// OVERLAP FUNCTIONS
 	overlapFunctions := grouping.FixedMarginOverlap{
@@ -46,53 +44,73 @@ func main() {
 	// }
 
 	if fname == "parse_pcap" || fname == "p" {
+		// create transport records from pcap and save them to file (source IP is needed to know which direction is incoming)
 		payload.PcapToTransportFiles(testCase.DataPath, testCase.SavePath, testCase.SourceIP)
 	} else {
 		if fname == "cluster" || fname == "c" {
+			// cluster based on a cooccurrence matrix
 			runCluster(clusterMethod, testCase.CoOccurrencePath)
 			return
 		} else if fname == "reduce_cooc" || fname == "rc" {
-			reduceCooc(testCase.CoOccurrencePath)
+			// reduce cooccurrence matrix using count-min sketch
+			testReduceCooc(testCase.CoOccurrencePath)
 			return
 		}
 
+		// load transport records from file
 		records, err := payload.LoadTransportsFromFiles(testCase.SavePath)
 		if err != nil {
 			log.Fatalf("Error loading transports: %v", err)
 		}
 
 		if fname == "display_transports" || fname == "dt" {
+			// print transport records stored in a file
 			payload.DisplayTransports(records)
 		} else if fname == "timestamps" || fname == "t" {
+			// build cooccurrence map from transport records
 			parseTimestamps(&overlapFunctions, records, testCase.CoOccurrencePath)
 		} else if fname == "evaluate" || fname == "e" {
+			// build cooccurrence map, cluster and evaluate
 			runEvaluate(&overlapFunctions, clusterMethod, records, testCase.CoOccurrencePath, testCase.RegionsFunc)
 		} else if fname == "genetic_hill_climbing" || fname == "ghc" {
+			// run genetic hill climbing to try and find the best options for cluster method (uses python clustering)
 			evaluation.GeneticHillClimbing(records, testCase)
 		} else if fname == "save_times" || fname == "st" {
+			// save the times of transport records to a file (used for analysis in python)
 			saveTimes(&overlapFunctions, records, testCase.TimesPath)
 		} else {
-			log.Fatalf("Unknown mode: %s", fname)
+			log.Fatalf("Unknown mode: %s. Available ones are {p,dt,t,c,e,ghc,st,rc}", fname)
 		}
 	}
 }
 
-func reduceCooc(coOccurrencePath string) {
-	// load cooc data from file
+// This method is just a test method to see if the count-min sketch method can be used to estimate the overlap values effectively in a fixed matrix size
+func testReduceCooc(coOccurrencePath string) {
+	// the idea of reducing the cooc map is that while loading the transport records you can
+	// use the count-min sketch to estimate the overlap values for the cooc map
+	// and store them in a fixed matrix size (8*d*w bytes)
+	// in stead of the current sparse matrix (max size is ~16N^2 bytes but on average only 7% are used so around 1.12*N^2 bytes)
+	//
+	// if it is decided to be used in stead of the current sparse matrix
+	// then the MakeCoOccurrence method should be updated to use the count-min sketch to estimate the overlap values
+	// and the underlying implementation of the coOccurence map should be updated to use a fixed matrix
+	// additionally, the cooc protobuf types should be changed and the save and load functions
+
+	// load cooc data from file (normally this should be done while loading transport records and not cooc map)
 	cooc := grouping.NewCoOccurrence(nil)
 	if err := cooc.LoadData(coOccurrencePath); err != nil {
 		panic(err)
 	}
+	// get size of current (sparse) cooc map
 	dataSize, idMapSize := cooc.MemorySize()
 	log.Printf("CoOccurrence memory size: data=%d ids=%d total=%d bytes", dataSize, idMapSize, dataSize+idMapSize)
 
-	d := uint(12)
-	w := uint(1000)
-	s, _ := countminsketch.New(d, w)
-	// size of data should be 8*d*w bytes
+	d := uint(12)                    // number of hash functions
+	w := uint(1000)                  // number of counters per hash function
+	s, _ := countminsketch.New(d, w) // size of data is 8*d*w bytes
 	fmt.Printf("d: %d, w: %d\n", s.D(), s.W())
 
-	// go through cooc data and add to count min sketch
+	// go through cooc data and add to count min sketch (normally this should be done while loading the transport records)
 	total, wrong := 0, 0
 	for i, cmap := range *cooc.GetData() {
 		for j, v := range cmap {
@@ -100,29 +118,28 @@ func reduceCooc(coOccurrencePath string) {
 		}
 	}
 
-	coocData := make([]*protocol.CoocOuter, 0)
-
+	coocData := make([]*protocol.CoocOuter, 0) // save estimated values to protobuf object (if you want to use them for clustering or to visualize heatmap)
 	totalErr := 0.0
-	// go through cooc data and compare estimated value to count min sketch value
+
+	// compare estimated (count min sketch) value to one in (sparse) cooc map
 	for i, coocInner := range *cooc.GetData() {
 		outer := &protocol.CoocOuter{Cid: i}
 		for j, v := range coocInner {
-			// load estimated value from count min sketch
-			estimate := s.EstimateString(fmt.Sprintf("%d-%d", i, j))
-			outer.CoocInner = append(outer.CoocInner, &protocol.CoocInner{Cid: j, Overlap: estimate})
+			estimate := s.EstimateString(fmt.Sprintf("%d-%d", i, j))                                  // load estimated value from count min sketch
+			outer.CoocInner = append(outer.CoocInner, &protocol.CoocInner{Cid: j, Overlap: estimate}) // save estimate to protobuf object
 			total++
 			if estimate != v {
-				currErr := float64(estimate-v) / float64(v) * 100
+				wrong++
+				currErr := float64(estimate-v) / float64(v) * 100 // error in percentage
 				totalErr += currErr
 				// fmt.Printf("Estimate failed for %d-%d: %d!=%d (difference=%d overflow by %.2f%%)\n", i, j, estimate, v, estimate-v, currErr)
-				wrong++
 			}
 		}
 		coocData = append(coocData, outer)
 	}
 	fmt.Printf("Total: %d, Wrong: %d, AvgErr: %.2f%%\n", total, wrong, totalErr/float64(wrong))
 
-	// get size of count min sketch using WriteTo
+	// get size of count min sketch using WriteTo to compare to sparse matrix size
 	buf := new(bytes.Buffer)
 	size, _ := s.WriteTo(buf)
 	log.Printf("CountMinSketch memory size: %d bytes", size)
@@ -139,6 +156,7 @@ func reduceCooc(coOccurrencePath string) {
 		panic(err)
 	}
 
+	// UNCOMMENT IF YOU WANT TO SAVE IN FILE
 	// save cooc to file if you want to cluster it
 	// err = os.WriteFile(coOccurrencePath, out, 0644)
 	// if err != nil {

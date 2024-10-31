@@ -111,16 +111,14 @@ func GeneticHillClimbing(records *map[ulid.ULID]*payload.TransportRecord, testCa
 			panic(err)
 		}
 
-		// opticsOpts := fmt.Sprintf("min_samples=%d,max_eps=%f", minSamples, eps)
-		// clusterMethod := NewOptics(opticsOpts)
-		hdbscanOpts := fmt.Sprintf("min_cluster_size=%d,cluster_selection_epsilon=%f", minSamples, eps)
-		clusterMethod := grouping.NewHDBSCAN(hdbscanOpts)
+		// clusterMethod := NewOptics(fmt.Sprintf("min_samples=%d,max_eps=%f", minSamples, eps))
+		clusterMethod := grouping.NewHDBSCAN(fmt.Sprintf("min_cluster_size=%d,cluster_selection_epsilon=%f", minSamples, eps))
 
 		clusterOps := &grouping.ClusterOpts{
 			ClusterMethod:    clusterMethod,
 			CoOccurrencePath: path,
 		}
-		clusters, probabilities, err := grouping.Cluster(clusterOps, false)
+		clusters, probabilities, err := grouping.PythonCluster(clusterOps, false)
 		if err != nil {
 			return 0, fmt.Errorf("error clustering: %v", err)
 		}
