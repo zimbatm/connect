@@ -10,3 +10,4 @@ connect/connect.test
 connect/profile
 inspect/data/ts2/*
 inspect/data/ghc/*
+!.gitkeep
