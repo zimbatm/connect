@@ -11,3 +11,5 @@ connect/profile
 inspect/data/ts2/*
 inspect/data/ghc/*
 !.gitkeep
+.direnv/
+
