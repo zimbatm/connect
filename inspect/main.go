@@ -26,11 +26,11 @@ func main() {
 	fname := os.Args[1]
 
 	// File paths for original data, transport records and cooccurence matrix
-	// testCase := evaluation.TestSession1
-	testCase := evaluation.TestSession2
-	fmt.Printf("Test Case=%+v\n", testCase)
+	// testSession := evaluation.TestSession1
+	testSession := evaluation.TestSession1
+	fmt.Printf("TestSession=%+v\n", testSession)
 
-	// CLUSTERING OPTIONS
+	// CLUSTERING OPTIONS (currently not used for main clustering since we are using go clustering)
 	// clusterMethod := grouping.NewOptics(fmt.Sprintf("min_samples=%d,max_eps=%f", 3, 0.20227))
 	clusterMethod := grouping.NewHDBSCAN(fmt.Sprintf("min_cluster_size=%d,min_samples=%d,cluster_selection_epsilon=%.12f,alpha=%.12f", 4, 1, 0.001, 0.001))
 
@@ -45,20 +45,20 @@ func main() {
 
 	if fname == "parse_pcap" || fname == "p" {
 		// create transport records from pcap and save them to file (source IP is needed to know which direction is incoming)
-		payload.PcapToTransportFiles(testCase.DataPath, testCase.SavePath, testCase.SourceIP)
+		payload.PcapToTransportFiles(testSession.DataPath, testSession.SavePath, testSession.SourceIP)
 	} else {
 		if fname == "cluster" || fname == "c" {
 			// cluster based on a cooccurrence matrix
-			runCluster(clusterMethod, testCase.CoOccurrencePath)
+			runCluster(clusterMethod, testSession.CoOccurrencePath)
 			return
 		} else if fname == "reduce_cooc" || fname == "rc" {
 			// reduce cooccurrence matrix using count-min sketch
-			testReduceCooc(testCase.CoOccurrencePath)
+			testReduceCooc(testSession.CoOccurrencePath)
 			return
 		}
 
 		// load transport records from file
-		records, err := payload.LoadTransportsFromFiles(testCase.SavePath)
+		records, err := payload.LoadTransportsFromFiles(testSession.SavePath)
 		if err != nil {
 			log.Fatalf("Error loading transports: %v", err)
 		}
@@ -68,16 +68,16 @@ func main() {
 			payload.DisplayTransports(records)
 		} else if fname == "timestamps" || fname == "t" {
 			// build cooccurrence map from transport records
-			parseTimestamps(&overlapFunctions, records, testCase.CoOccurrencePath)
+			parseTimestamps(&overlapFunctions, records, testSession.CoOccurrencePath)
 		} else if fname == "evaluate" || fname == "e" {
 			// build cooccurrence map, cluster and evaluate
-			runEvaluate(&overlapFunctions, clusterMethod, records, testCase.CoOccurrencePath, testCase.RegionsFunc)
+			runEvaluate(&overlapFunctions, clusterMethod, records, testSession.CoOccurrencePath, testSession.Regions)
 		} else if fname == "genetic_hill_climbing" || fname == "ghc" {
 			// run genetic hill climbing to try and find the best options for cluster method (uses python clustering)
-			evaluation.GeneticHillClimbing(records, testCase)
+			evaluation.GeneticHillClimbing(records, testSession)
 		} else if fname == "save_times" || fname == "st" {
 			// save the times of transport records to a file (used for analysis in python)
-			saveTimes(&overlapFunctions, records, testCase.TimesPath)
+			saveTimes(&overlapFunctions, records, testSession.TimesPath)
 		} else {
 			log.Fatalf("Unknown mode: %s. Available ones are {p,dt,t,c,e,ghc,st,rc}", fname)
 		}
@@ -201,7 +201,7 @@ func runCluster(clusterMethod grouping.ClusterMethod, coOccurrencePath string) {
 	}
 }
 
-func runEvaluate(overlapFunctions grouping.OverlapFunctions, clusterMethod grouping.ClusterMethod, records *map[ulid.ULID]*payload.TransportRecord, coOccurrencePath string, regionsFunc evaluation.RegionsFunc) {
+func runEvaluate(overlapFunctions grouping.OverlapFunctions, clusterMethod grouping.ClusterMethod, records *map[ulid.ULID]*payload.TransportRecord, coOccurrencePath string, initialRegions []evaluation.Region) {
 	time1 := time.Now()
 	// build cooccurrence map
 	sessionTimestamps := grouping.MakeTimestamps(overlapFunctions, records)
@@ -236,7 +236,7 @@ func runEvaluate(overlapFunctions grouping.OverlapFunctions, clusterMethod group
 
 	time3 := time.Now()
 	// evaluate
-	regions := regionsFunc(earliestTimestamp, 3)
+	regions := evaluation.ConstructRegions(initialRegions, earliestTimestamp, 3)
 	// for i, r := range *regions {
 	// 	fmt.Printf("Region %d: %s - %s\n", i+1, ReadableTime(r.minT), ReadableTime(r.maxT))
 	// }

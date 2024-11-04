@@ -9,7 +9,7 @@ import (
 	"bringyour.com/inspect/grouping"
 )
 
-type region struct {
+type Region struct {
 	minT uint64
 	maxT uint64
 }
@@ -21,7 +21,7 @@ func ReadableTime(timestamp uint64) string {
 // getSessionRegion returns the region ID of a session based on its earliest time
 // if the session's earliest time is in between regions then the ID is the one inbetween the two corresponding regions
 // i.e., if the session is in between region 1 and 2, then the ID is 1.5
-func getSessionRegion(earliestTime uint64, regions []region) float64 {
+func getSessionRegion(earliestTime uint64, regions []Region) float64 {
 	for i, r := range regions {
 		regionID := i + 1
 		if earliestTime < r.minT {
@@ -42,7 +42,7 @@ func getSessionRegion(earliestTime uint64, regions []region) float64 {
 // earliestTime is the earliest time when data starts (in seconds)
 // leeway is the added time in nanoseconds to the regions (if 0, then no leeway is added)
 // returns the regions with minT and maxT in nanoseconds and added leeway
-func constructRegions(firstRegions []region, earliestTime uint64, leeway uint64) *[]region {
+func ConstructRegions(firstRegions []Region, earliestTime uint64, leeway uint64) *[]Region {
 	// add leeway to region bounds
 	if leeway != 0 {
 		for i, r := range firstRegions {
@@ -69,48 +69,19 @@ func constructRegions(firstRegions []region, earliestTime uint64, leeway uint64)
 		}
 	}
 
-	finalRegions := []region{}
+	finalRegions := []Region{}
 	for _, r := range firstRegions {
 		// convert to nanoseconds and add earliest time
 		newMinT := r.minT*grouping.NS_IN_SEC + earliestTime
 		newMaxT := r.maxT*grouping.NS_IN_SEC + earliestTime
-		newRegiond := region{minT: newMinT, maxT: newMaxT}
+		newRegiond := Region{minT: newMinT, maxT: newMaxT}
 		finalRegions = append(finalRegions, newRegiond)
 	}
 
 	return &finalRegions
 }
 
-func ConstructTestSession1Regions(earliestTime uint64, leeway uint64) *[]region {
-	firstRegions := []region{
-		{minT: 11, maxT: 69},
-		{minT: 78, maxT: 136},
-		{minT: 136, maxT: 185},
-		{minT: 194, maxT: 250},
-	}
-	finalRegions := constructRegions(firstRegions, earliestTime, leeway)
-	return finalRegions
-}
-
-func ConstructTestSession2Regions(earliestTime uint64, leeway uint64) *[]region {
-	firstRegions := []region{
-		{minT: 19, maxT: 50},
-		{minT: 58, maxT: 115},
-		{minT: 125, maxT: 170},
-		{minT: 170, maxT: 230},
-		{minT: 238, maxT: 294},
-		{minT: 302, maxT: 360},
-		{minT: 364, maxT: 410},
-		{minT: 415, maxT: 472},
-		{minT: 478, maxT: 528},
-		{minT: 534, maxT: 570},
-		{minT: 579, maxT: 600},
-	}
-	finalRegions := constructRegions(firstRegions, earliestTime, leeway)
-	return finalRegions
-}
-
-func Evaluate(sessionTimestamps map[grouping.SessionID]*grouping.Timestamps, regions []region, clusters map[string][]grouping.SessionID, probabilities map[string][]float64) float64 {
+func Evaluate(sessionTimestamps map[grouping.SessionID]*grouping.Timestamps, regions []Region, clusters map[string][]grouping.SessionID, probabilities map[string][]float64) float64 {
 	purities := make([]float64, 0)
 	unclusteredPurity := 0.0
 

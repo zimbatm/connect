@@ -14,8 +14,6 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-type RegionsFunc func(earliestTime uint64, leeway uint64) *[]region
-
 type GeneticCluster struct {
 	minSamples uint64  // min_samples
 	eps        float64 // max_eps
@@ -67,20 +65,15 @@ func (c *GeneticCluster) Clone() eaopt.Genome {
 	return &GeneticCluster{minSamples: c.minSamples, eps: c.eps, stdDev: c.stdDev, scoreFunc: c.scoreFunc}
 }
 
-func GeneticHillClimbing(records *map[ulid.ULID]*payload.TransportRecord, testCase TestCase) {
-	overlapFunctions := grouping.GaussianOverlap{
-		StdDev: grouping.TimestampInNano(0.010_000_000),
-		Cutoff: 4,
-	}
+func GeneticHillClimbing(records *map[ulid.ULID]*payload.TransportRecord, testSession TestSession) {
 
-	// build cooccurrence map
+	// build cooccurrence map to get earliest time for region calculation
 	time1 := time.Now()
-	sessionTimestamps := grouping.MakeTimestamps(&overlapFunctions, records)
-	cooc, earliestTimestamp := grouping.MakeCoOccurrence(sessionTimestamps)
-	cooc.SaveData(testCase.CoOccurrencePath)
+	initialOvF := grouping.GaussianOverlap{StdDev: grouping.TimestampInNano(0.010_000_000), Cutoff: 4}
+	sessionTimestamps := grouping.MakeTimestamps(&initialOvF, records)
+	_, earliestTimestamp := grouping.MakeCoOccurrence(sessionTimestamps)
 	fmt.Printf("Cooccurrence took %v\n", time.Since(time1))
-
-	regions := testCase.RegionsFunc(earliestTimestamp, 3)
+	regions := ConstructRegions(testSession.Regions, earliestTimestamp, 3)
 
 	customScoreFunc := func(minSamples uint64, eps float64, stdDev float64) (float64, error) {
 		path := fmt.Sprintf("data/ghc/cooc_%f.pb", stdDev)
